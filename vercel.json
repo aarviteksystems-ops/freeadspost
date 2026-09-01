@@ -3,14 +3,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "build/client",
   "functions": {
-    "api/ads.js": {
+    "api/ads/index.js": {
       "maxDuration": 10
     }
-  },
-  "rewrites": [
-    {
-      "source": "/:path*",
-      "destination": "/index.html"
-    }
-  ]
+  }
 }
