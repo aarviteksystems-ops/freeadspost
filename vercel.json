@@ -2,10 +2,15 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "build/client",
+  "functions": {
+    "api/ads.js": {
+      "maxDuration": 10
+    }
+  },
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/index.js"
+      "source": "/api/ads",
+      "destination": "/api/ads.js"
     },
     {
       "source": "/:path*",
