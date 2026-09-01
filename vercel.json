@@ -9,10 +9,6 @@
   },
   "rewrites": [
     {
-      "source": "/api/ads",
-      "destination": "/api/ads.js"
-    },
-    {
       "source": "/:path*",
       "destination": "/index.html"
     }
