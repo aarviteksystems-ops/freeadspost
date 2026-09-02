@@ -265,7 +265,11 @@ export default function Browse() {
                         <div className="ad-card-footer">
                           <span className="ad-price">{getAdPriceDisplay(ad)}</span>
                           <span className="ad-location">📍 {ad.city}</span>
-                          <span style={{ color: "#16a34a", fontSize: "0.78rem", fontWeight: 600 }}>🟢 Seller available</span>
+                          {ad.sellerAvailable !== false ? (
+                            <span style={{ color: "#16a34a", fontSize: "0.78rem", fontWeight: 600 }}>🟢 Available</span>
+                          ) : (
+                            <span style={{ color: "var(--muted)", fontSize: "0.78rem" }}>⚪ Away</span>
+                          )}
                           <span className="ad-date">🕐 {getFormattedDate(ad.postedAt)}</span>
                         </div>
                       </div>

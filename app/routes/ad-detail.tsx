@@ -180,9 +180,15 @@ export default function AdDetail() {
                       <div style={{ color: "var(--muted)", marginTop: "3px" }}>{ad.seller.companyName}</div>
                     )}
                   </div>
-                  <div style={{ marginBottom: "14px", color: "var(--success, #22c55e)", fontWeight: 600, fontSize: "0.9rem" }}>
-                    🟢 Seller available to respond
-                  </div>
+                  {ad.sellerAvailable !== false ? (
+                    <div style={{ marginBottom: "14px", color: "var(--success, #22c55e)", fontWeight: 600, fontSize: "0.9rem" }}>
+                      🟢 Seller available to respond
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: "14px", color: "var(--muted)", fontWeight: 500, fontSize: "0.9rem" }}>
+                      ⚪ Seller is currently away
+                    </div>
+                  )}
 
                   {!isLoggedIn ? (
                     <div

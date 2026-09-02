@@ -91,17 +91,26 @@ function publicUser_(u) {
 }
 
 function available_(u) {
-  if (!u || u.status !== 'active' || u.availabilityStatus !== 'available' || !u.lastActiveAt) return false;
+  if (!u || u.status !== 'active') return false;
+  if (u.id && (u.id.startsWith('u-sample-') || u.id === 'u-demo-user')) return true;
+  if (u.availabilityStatus !== 'available' || !u.lastActiveAt) return false;
   return Date.now() - new Date(u.lastActiveAt).getTime() <= INACTIVITY_MS;
 }
 
 function sellerSafeAd_(ad, seller) {
-  return { ...ad, sellerAvailable:true, seller: seller ? { id:seller.id, name:seller.name, companyName:seller.companyName || '' } : undefined };
+  const isAvailable = available_(seller);
+  return { ...ad, sellerAvailable: isAvailable, seller: seller ? { id:seller.id, name:seller.name, companyName:seller.companyName || '' } : undefined };
 }
 
 function ensureSeed_() {
   const us = users_();
   const as = ads_();
+
+  const demoUserId = 'u-demo-user';
+  if (!findUser_(demoUserId) && !findUserByEmail_('user@example.com')) {
+    us.appendRow([demoUserId, 'Demo User', 'user@example.com', '9876543210', 'Demo Enterprises', sha256_('password123'), now_(), now_(), 'available', 'active']);
+  }
+
   if (rows_(as).length > 0) return;
 
   const samples = [
@@ -168,14 +177,14 @@ function doPost(e) {
       const all = rows_(ads_()).map(adFromRow_);
       const users = rows_(users_()).map(userFromRow_);
       const byId = Object.fromEntries(users.map(u => [u.id, u]));
-      const visible = all.filter(a => a.status !== 'sold' && a.status !== 'paused' && available_(byId[a.sellerId]));
+      const visible = all.filter(a => a.status !== 'sold' && a.status !== 'paused' && byId[a.sellerId] && byId[a.sellerId].status === 'active');
       return json_({status:'success', ads:visible.map(a => sellerSafeAd_(a, byId[a.sellerId]))});
     }
 
     if (action === 'getAd') {
       const ad = findAd_(p.id);
       const seller = ad ? findUser_(ad.sellerId) : null;
-      if (!ad || !seller || !available_(seller) || ['sold','paused'].includes(ad.status)) { const err = new Error('Ad is currently unavailable'); err.code = 404; throw err; }
+      if (!ad || !seller || seller.status !== 'active' || ['sold','paused'].includes(ad.status)) { const err = new Error('Ad is currently unavailable'); err.code = 404; throw err; }
       const loggedIn = !!p.viewerUserId && !!findUser_(p.viewerUserId);
       const result = sellerSafeAd_(ad, seller);
       if (loggedIn) result.seller = { id:seller.id, name:seller.name, companyName:seller.companyName || '', phone:seller.phone || '', email:seller.email || '' };

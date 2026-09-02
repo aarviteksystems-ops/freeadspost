@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "react-router build",
-    "dev": "concurrently \"node server.js\" \"react-router dev\"",
+    "dev": "concurrently \"node --watch server.js\" \"react-router dev\"",
     "server": "node server.js",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc"
