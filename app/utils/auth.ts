@@ -44,15 +44,20 @@ export async function login(email: string, password: string): Promise<{ success:
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    const data = await res.json();
+    let data: any = {};
+    try {
+      data = await res.json();
+    } catch {
+      return { success: false, error: `Server returned ${res.status} ${res.statusText || "error"}. Check Vercel function logs.` };
+    }
     if (!res.ok) return { success: false, error: data.error || "Login failed" };
 
     localStorage.setItem(TOKEN_KEY, data.token);
     localStorage.setItem(USER_KEY, JSON.stringify(data.user));
     window.dispatchEvent(new Event("auth-change"));
     return { success: true };
-  } catch {
-    return { success: false, error: "Network error, please try again." };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Network error, please try again." };
   }
 }
 
@@ -69,15 +74,20 @@ export async function register(payload: {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
+    let data: any = {};
+    try {
+      data = await res.json();
+    } catch {
+      return { success: false, error: `Server returned ${res.status} ${res.statusText || "error"}. Check Vercel function logs.` };
+    }
     if (!res.ok) return { success: false, error: data.error || "Registration failed" };
 
     localStorage.setItem(TOKEN_KEY, data.token);
     localStorage.setItem(USER_KEY, JSON.stringify(data.user));
     window.dispatchEvent(new Event("auth-change"));
     return { success: true };
-  } catch {
-    return { success: false, error: "Network error, please try again." };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Network error, please try again." };
   }
 }
 
