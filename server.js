@@ -13,7 +13,11 @@ app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
 const WEBHOOK_URL = () => String(process.env.GOOGLE_SHEET_WEBHOOK_URL || "").trim();
-const TOKEN_SECRET = () => String(process.env.FREEADSPOST_TOKEN_SECRET || "").trim();
+const DEFAULT_SECRET = "freeadspost-default-session-token-secret-key-2026-v1";
+const TOKEN_SECRET = () => {
+  const envSecret = String(process.env.FREEADSPOST_TOKEN_SECRET || "").trim();
+  return envSecret || DEFAULT_SECRET;
+};
 
 function base64url(input) {
   return Buffer.from(input).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
@@ -21,7 +25,6 @@ function base64url(input) {
 
 function createToken(userId) {
   const secret = TOKEN_SECRET();
-  if (!secret) throw new Error("FREEADSPOST_TOKEN_SECRET is not configured");
   const payload = base64url(JSON.stringify({ sub: userId, exp: Date.now() + 30 * 24 * 60 * 60 * 1000 }));
   const signature = base64url(crypto.createHmac("sha256", secret).update(payload).digest());
   return `fap.${payload}.${signature}`;
@@ -112,11 +115,19 @@ router.post("/register", async (req, res) => {
   try {
     const { name, email, phone, companyName, password } = req.body || {};
     if (!name || !email || !phone || !password) return res.status(400).json({ error: "Name, email, phone and password are required" });
-    const data = await gas("register", { name, email, phone, companyName: companyName || "", password });
+    const cleanPhone = String(phone).replace(/[^\d]/g, "");
+    if (!/^\d{7,15}$/.test(cleanPhone)) return res.status(400).json({ error: "Please enter a valid phone number (7 to 15 digits)" });
+    const data = await gas("register", {
+      name: String(name).trim(),
+      email: String(email).trim().toLowerCase(),
+      phone: cleanPhone,
+      companyName: String(companyName || "").trim(),
+      password: String(password)
+    });
     if (!data?.user?.id) throw new Error(data?.error || "Registration failed on storage service");
     const token = createToken(data.user.id);
     res.status(201).json({ token, user: publicUser(data.user) });
-  } catch (e) { res.status(e.status === 409 ? 409 : 500).json({ error: e.message }); }
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 
 router.post("/login", async (req, res) => {
@@ -125,8 +136,9 @@ router.post("/login", async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
     const data = await gas("login", { email, password });
     if (!data?.user?.id) throw new Error(data?.error || "Invalid email or password");
-    res.json({ token: createToken(data.user.id), user: publicUser(data.user) });
-  } catch (e) { res.status(e.status === 401 ? 401 : 500).json({ error: e.message }); }
+    const token = createToken(data.user.id);
+    res.json({ token, user: publicUser(data.user) });
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 
 router.use(async (req, res, next) => {

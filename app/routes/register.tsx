@@ -30,13 +30,13 @@ export default function Register() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    const cleanPhone = phone.replace(/\s/g, "");
+    const cleanPhone = phone.replace(/[\s\-()]/g, "");
     if (!name.trim() || !email.trim() || !password.trim()) {
       setError("Name, email and password are required.");
       return;
     }
-    if (!/^\d{7,15}$/.test(cleanPhone)) {
-      setError("Please enter a valid phone number.");
+    if (!/^\+?\d{7,15}$/.test(cleanPhone)) {
+      setError("Please enter a valid phone number (7 to 15 digits).");
       return;
     }
     if (password.length < 6) {
