@@ -81,13 +81,17 @@ const Router = (function() {
       ''
     );
 
-    // Support HTTP method override (_method) via POST body only, strictly whitelisted
+    // Support HTTP method override (_method) via POST body or query params, strictly whitelisted
     let effectiveMethod = httpMethod.toUpperCase();
-    if (httpMethod.toUpperCase() === 'POST' && body && typeof body._method === 'string') {
-      const requestedMethod = body._method.trim().toUpperCase();
-      const allowedOverrides = ['PUT', 'DELETE'];
-      if (allowedOverrides.indexOf(requestedMethod) !== -1) {
-        effectiveMethod = requestedMethod;
+    if (httpMethod.toUpperCase() === 'POST') {
+      const overrideVal = (body && typeof body._method === 'string' && body._method) ||
+                          (params && typeof params._method === 'string' && params._method);
+      if (overrideVal) {
+        const requestedMethod = overrideVal.trim().toUpperCase();
+        const allowedOverrides = ['PUT', 'DELETE'];
+        if (allowedOverrides.indexOf(requestedMethod) !== -1) {
+          effectiveMethod = requestedMethod;
+        }
       }
     }
 

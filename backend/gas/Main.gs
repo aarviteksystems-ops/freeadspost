@@ -136,11 +136,16 @@
   /**
    * POST /ads
    * Dual-purpose handler:
-   * 1. If payload contains ad creation fields (e.g. title), creates new ad (requires auth & rate limit).
+   * 1. If payload contains ad creation fields (e.g. title + category + description, or contact_preference),
+   *    creates new ad (requires auth & rate limit).
    * 2. Otherwise acts as filtered public ads query for RPC client compatibility.
    */
   function handlePostAds(req) {
-    if (req.body && req.body.title && req.body.category && req.body.description) {
+    const isCreate = req.body && (
+      (req.body.title && req.body.category && req.body.description) ||
+      req.body.contact_preference !== undefined
+    );
+    if (isCreate) {
       return RateLimiter.limitCreateAd(Auth.requireAuth(function(authReq) {
         return AdService.createAd(authReq.user, authReq.body);
       }))(req);
@@ -167,6 +172,7 @@
     return AdService.getPublicAdById(adId, req.user);
   }
   Router.get('ads/:id', handleGetPublicAd, [Auth.optionalAuth]);
+  Router.post('ads/:id', handleGetPublicAd, [Auth.optionalAuth]);
   Router.get('ad', handleGetPublicAd, [Auth.optionalAuth]);
   Router.post('ad', handleGetPublicAd, [Auth.optionalAuth]);
 
@@ -181,6 +187,7 @@
     return AdService.updateAd(req.user, payload);
   }
   Router.put('ads/:id', handleUpdateAd, [Auth.requireAuth]);
+  Router.post('ads/:id/update', handleUpdateAd, [Auth.requireAuth]);
   Router.put('update-ad', handleUpdateAd, [Auth.requireAuth]);
   Router.post('update-ad', handleUpdateAd, [Auth.requireAuth]);
 
@@ -194,6 +201,7 @@
     return AdService.deleteAd(req.user, adId);
   }
   Router.del('ads/:id', handleDeleteAd, [Auth.requireAuth]);
+  Router.post('ads/:id/delete', handleDeleteAd, [Auth.requireAuth]);
   Router.del('delete-ad', handleDeleteAd, [Auth.requireAuth]);
   Router.post('delete-ad', handleDeleteAd, [Auth.requireAuth]);
 
