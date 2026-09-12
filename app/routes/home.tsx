@@ -3,6 +3,9 @@ import { Link } from "react-router";
 import { useAuth } from "~/context/AuthContext";
 import { getPublicAds, type AdItem } from "~/services/api";
 import { AdCard } from "~/components/AdCard";
+import { toCategorySlug } from "~/utils/categories";
+import { StructuredData } from "~/components/StructuredData";
+import { buildWebSiteSchema, buildOrganizationSchema } from "~/utils/schema";
 
 export function meta() {
   return [
@@ -104,8 +107,12 @@ export default function Home() {
     loadAds();
   }, [token, selectedCategory, searchQuery, selectedLocation]);
 
+  const webSiteSchema = buildWebSiteSchema();
+  const orgSchema = buildOrganizationSchema();
+
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col bg-slate-50 dark:bg-slate-950">
+      <StructuredData data={[webSiteSchema, orgSchema]} />
       {/* ========================================================= */}
       {/* 1. TRUSTED INDIAN CLASSIFIEDS HERO & SEARCH HEADER         */}
       {/* ========================================================= */}
@@ -127,76 +134,83 @@ export default function Home() {
           </div>
 
           {/* Quick Search & City Controls */}
-          {isAuthenticated ? (
-            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 max-w-4xl">
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-3">
-                {/* Search Input */}
-                <div className="sm:col-span-6 relative">
-                  <span className="absolute left-3 top-3 text-slate-400 text-sm">🔍</span>
-                  <input
-                    type="text"
-                    placeholder="Find cars, phones, flats, jobs, services..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-8 py-2.5 rounded-md text-xs sm:text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery("")}
-                      className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 text-xs"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-
-                {/* Location Quick Select */}
-                <div className="sm:col-span-4 relative">
-                  <span className="absolute left-3 top-3 text-slate-400 text-sm">📍</span>
-                  <select
-                    value={selectedLocation}
-                    onChange={(e) => setSelectedLocation(e.target.value === "All India" ? "" : e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-md text-xs sm:text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+          <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 max-w-4xl">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-3">
+              {/* Search Input */}
+              <div className="sm:col-span-6 relative">
+                <span className="absolute left-3 top-3 text-slate-400 text-sm">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Find cars, phones, flats, jobs, services..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2.5 rounded-md text-xs sm:text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 text-xs"
                   >
-                    {POPULAR_CITIES.map((city) => (
-                      <option key={city} value={city}>
-                        {city}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    ✕
+                  </button>
+                )}
+              </div>
 
-                {/* Action Link */}
-                <div className="sm:col-span-2">
-                  <Link
-                    to="/ads"
-                    className="w-full h-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm font-bold rounded-md flex items-center justify-center transition-colors shadow-sm"
-                  >
-                    Browse All
-                  </Link>
-                </div>
+              {/* Location Quick Select */}
+              <div className="sm:col-span-4 relative">
+                <span className="absolute left-3 top-3 text-slate-400 text-sm">📍</span>
+                <select
+                  value={selectedLocation}
+                  onChange={(e) => setSelectedLocation(e.target.value === "All India" ? "" : e.target.value)}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-md text-xs sm:text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  {POPULAR_CITIES.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Action Link */}
+              <div className="sm:col-span-2">
+                <Link
+                  to={`/ads${
+                    searchQuery || (selectedLocation && selectedLocation !== "All India")
+                      ? `?${new URLSearchParams({
+                          ...(searchQuery ? { q: searchQuery } : {}),
+                          ...(selectedLocation && selectedLocation !== "All India" ? { location: selectedLocation } : {}),
+                        }).toString()}`
+                      : ""
+                  }`}
+                  className="w-full h-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm font-bold rounded-md flex items-center justify-center transition-colors shadow-sm"
+                >
+                  Browse All
+                </Link>
               </div>
             </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <Link
-                to="/login"
-                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm font-bold rounded-md transition-colors shadow-sm"
-              >
-                Sign In to View Classifieds
-              </Link>
+          </div>
+
+          {!isAuthenticated && (
+            <div className="flex flex-wrap items-center gap-3 pt-1">
               <Link
                 to="/register"
-                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs sm:text-sm font-semibold rounded-md border border-slate-700 transition-colors"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-md border border-slate-700 transition-colors"
               >
-                Create Free Member Account
+                Create Free Account
               </Link>
               <Link
                 to="/post-ad"
-                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs sm:text-sm font-bold rounded-md border border-slate-700 transition-colors"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold rounded-md border border-slate-700 transition-colors"
               >
                 + Post Free Ad
+              </Link>
+              <Link
+                to="/login"
+                className="text-xs text-slate-400 hover:text-white transition-colors underline ml-1"
+              >
+                Already a member? Sign In
               </Link>
             </div>
           )}
@@ -235,25 +249,56 @@ export default function Home() {
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
             {CATEGORY_TILES.map((cat) => (
-              <button
+              <Link
                 key={cat.name}
-                type="button"
-                onClick={() => setSelectedCategory(cat.name)}
-                className={`p-3 rounded-lg border text-left transition-all ${
-                  selectedCategory === cat.name
-                    ? "border-blue-600 bg-blue-50 dark:bg-blue-950/60 dark:border-blue-700 shadow-sm"
-                    : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800"
-                }`}
+                to={`/category/${toCategorySlug(cat.name)}`}
+                className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition-all hover:border-blue-500 hover:shadow-xs group"
               >
                 <div className="text-2xl mb-1">{cat.icon}</div>
-                <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                <div className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate">
                   {cat.name}
                 </div>
                 <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                   {cat.count}
                 </div>
-              </button>
+              </Link>
             ))}
+          </div>
+
+          {/* Active Metro City Links */}
+          <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2 text-xs">
+            <span className="font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 text-[10px]">
+              Active Locations:
+            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Link to="/location/mumbai" className="text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-semibold">
+                📍 Mumbai
+              </Link>
+              <span className="text-slate-300 dark:text-slate-700">•</span>
+              <Link to="/location/delhi" className="text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-semibold">
+                📍 Delhi NCR
+              </Link>
+              <span className="text-slate-300 dark:text-slate-700">•</span>
+              <Link to="/location/bengaluru" className="text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-semibold">
+                📍 Bengaluru
+              </Link>
+              <span className="text-slate-300 dark:text-slate-700">•</span>
+              <Link to="/location/hyderabad" className="text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-semibold">
+                📍 Hyderabad
+              </Link>
+              <span className="text-slate-300 dark:text-slate-700">•</span>
+              <Link to="/location/pune" className="text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-semibold">
+                📍 Pune
+              </Link>
+              <span className="text-slate-300 dark:text-slate-700">•</span>
+              <Link to="/location/chennai" className="text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-semibold">
+                📍 Chennai
+              </Link>
+              <span className="text-slate-300 dark:text-slate-700">•</span>
+              <Link to="/location/kolkata" className="text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-semibold">
+                📍 Kolkata
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -357,6 +402,108 @@ export default function Home() {
             </div>
           </div>
         )}
+      </section>
+
+      {/* ========================================================= */}
+      {/* 4. POPULAR CLASSIFIED SEARCHES ACROSS INDIA               */}
+      {/* ========================================================= */}
+      <section className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              Explore Popular Indian Classifieds
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Direct links to verified local listings in India&apos;s leading cities.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 text-xs">
+            <div className="space-y-2.5">
+              <span className="font-bold text-slate-900 dark:text-white block text-sm">Metropolitan Hubs</span>
+              <ul className="space-y-2 text-slate-600 dark:text-slate-400">
+                <li>
+                  <Link to="/location/delhi" className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                    Used Cars &amp; Vehicles in Delhi NCR
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/location/mumbai" className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                    Professional Services in Mumbai
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/location/bengaluru" className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                    Web &amp; IT Services in Bengaluru
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-2.5">
+              <span className="font-bold text-slate-900 dark:text-white block text-sm">Jobs &amp; Properties</span>
+              <ul className="space-y-2 text-slate-600 dark:text-slate-400">
+                <li>
+                  <Link to="/location/hyderabad" className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                    Flats &amp; Real Estate in Hyderabad
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/location/pune" className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                    Tech Jobs in Pune
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/category/jobs" className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                    All Employment Vacancies
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-2.5">
+              <span className="font-bold text-slate-900 dark:text-white block text-sm">Electronics &amp; Goods</span>
+              <ul className="space-y-2 text-slate-600 dark:text-slate-400">
+                <li>
+                  <Link to="/location/chennai" className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                    Laptops &amp; Gadgets in Chennai
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/location/kolkata" className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                    Furniture &amp; Goods in Kolkata
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/category/electronics" className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                    Electronics Classifieds
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-2.5">
+              <span className="font-bold text-slate-900 dark:text-white block text-sm">Top Categories</span>
+              <ul className="space-y-2 text-slate-600 dark:text-slate-400">
+                <li>
+                  <Link to="/category/vehicles" className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                    Cars &amp; Vehicles for Sale
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/category/real-estate" className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                    Homes &amp; Commercial Real Estate
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/category/services" className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                    Verified Local Services
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* ========================================================= */}
@@ -516,7 +663,7 @@ export default function Home() {
                   </p>
                   <div className="flex items-center justify-center gap-2 pt-1">
                     <Link
-                      to={`/login?redirect=${encodeURIComponent(`/ad/${selectedAd.ad_id}`)}`}
+                      to={`/login?redirect=${encodeURIComponent(`/ad/${selectedAd.slug || selectedAd.ad_id}`)}`}
                       className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-md transition-colors"
                     >
                       Log In
@@ -591,7 +738,7 @@ export default function Home() {
 
               <div className="pt-2 border-t border-slate-200 dark:border-slate-800 text-center">
                 <Link
-                  to={`/ad/${selectedAd.ad_id}`}
+                  to={`/ad/${selectedAd.slug || selectedAd.ad_id}`}
                   className="text-xs font-bold text-blue-700 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
                 >
                   <span>Open Full Ad Page</span>

@@ -3,6 +3,8 @@ import { Link, useSearchParams } from "react-router";
 import { AdCard } from "~/components/AdCard";
 import { useAuth } from "~/context/AuthContext";
 import { getPublicAds, type AdItem, type PublicAdsOptions } from "~/services/api";
+import { SUPPORTED_CATEGORIES } from "~/utils/categories";
+import { KNOWN_LOCATIONS } from "~/utils/locations";
 
 export function meta() {
   return [
@@ -206,6 +208,40 @@ function AdsDiscoveryContent() {
           </div>
         </div>
 
+        {/* Crawlable Quick Discovery Links for Categories and Metros */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3.5 sm:p-4 shadow-xs space-y-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-bold text-slate-700 dark:text-slate-300">Browse by Category:</span>
+            {SUPPORTED_CATEGORIES.map((cat) => (
+              <Link
+                key={cat.slug}
+                to={`/category/${cat.slug}`}
+                className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-medium transition-colors inline-flex items-center gap-1"
+              >
+                <span>{cat.icon}</span>
+                <span>{cat.displayName}</span>
+              </Link>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs pt-2.5 border-t border-slate-100 dark:border-slate-800">
+            <span className="font-bold text-slate-700 dark:text-slate-300">Browse by Location:</span>
+            {["mumbai", "delhi", "bengaluru", "hyderabad", "pune", "chennai", "kolkata"].map((slug) => {
+              const loc = KNOWN_LOCATIONS.find((l) => l.slug === slug);
+              if (!loc) return null;
+              return (
+                <Link
+                  key={slug}
+                  to={`/location/${slug}`}
+                  className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-medium transition-colors"
+                >
+                  📍 {loc.city}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
         {/* ========================================================= */}
         {/* 2. SEARCH & FILTER CONTROLS                               */}
         {/* ========================================================= */}
@@ -217,6 +253,7 @@ function AdsDiscoveryContent() {
             <div className="lg:col-span-5 relative">
               <input
                 type="text"
+                aria-label="Search advertisements by keywords, items, or services"
                 placeholder="Search keywords, items, or services..."
                 value={searchQuery}
                 onChange={(e) => {
@@ -229,6 +266,7 @@ function AdsDiscoveryContent() {
               {searchQuery && (
                 <button
                   type="button"
+                  aria-label="Clear search input"
                   onClick={() => {
                     setSearchQuery("");
                     setPage(1);
@@ -243,6 +281,7 @@ function AdsDiscoveryContent() {
             {/* Category Filter */}
             <div className="lg:col-span-3">
               <select
+                aria-label="Filter by category"
                 value={selectedCategory}
                 onChange={(e) => {
                   setSelectedCategory(e.target.value);
@@ -262,6 +301,7 @@ function AdsDiscoveryContent() {
             <div className="lg:col-span-2">
               <input
                 type="text"
+                aria-label="Filter by city or location"
                 placeholder="City, State..."
                 value={selectedLocation}
                 onChange={(e) => {
@@ -281,6 +321,7 @@ function AdsDiscoveryContent() {
             {/* Sorting */}
             <div className="lg:col-span-2">
               <select
+                aria-label="Sort advertisements"
                 value={sortBy}
                 onChange={(e) => {
                   setSortBy(e.target.value as "sponsored_first" | "newest" | "oldest");
@@ -596,14 +637,14 @@ function AdsDiscoveryContent() {
                 <div className="border border-amber-200 dark:border-amber-900/60 bg-amber-50/80 dark:bg-amber-950/40 rounded-lg p-3.5 text-center space-y-2">
                   <div className="text-base">🔒</div>
                   <div className="font-bold text-slate-900 dark:text-white text-xs">
-                    Login to view contact information
+                    Login to view seller contact information
                   </div>
                   <p className="text-[11px] text-slate-600 dark:text-slate-400">
                     To protect sellers from spam and fraud, phone numbers and email addresses are only accessible to verified members.
                   </p>
                   <div className="flex items-center justify-center gap-2 pt-1">
                     <Link
-                      to={`/login?redirect=${encodeURIComponent(`/ad/${selectedAd.ad_id}`)}`}
+                      to={`/login?redirect=${encodeURIComponent(`/ad/${selectedAd.slug || selectedAd.ad_id}`)}`}
                       className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-md transition-colors"
                     >
                       Log In
@@ -678,7 +719,7 @@ function AdsDiscoveryContent() {
 
               <div className="pt-2 border-t border-slate-200 dark:border-slate-800 text-center">
                 <Link
-                  to={`/ad/${selectedAd.ad_id}`}
+                  to={`/ad/${selectedAd.slug || selectedAd.ad_id}`}
                   className="text-xs font-bold text-blue-700 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
                 >
                   <span>Open Full Ad Page</span>

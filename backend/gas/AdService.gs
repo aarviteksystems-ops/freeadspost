@@ -526,8 +526,9 @@ const AdService = (function() {
       const ad = allAds[i];
       if (ad.status !== 'APPROVED') continue;
 
-      // Dynamic Seller Login Visibility Rule: Seller must be actively logged in
-      if (!loggedInUserIds[String(ad.user_id)]) {
+      // Dynamic Seller Login Visibility Rule: Enforced only if REQUIRE_SELLER_LOGIN setting is enabled
+      const requireSellerLogin = Config.get('REQUIRE_SELLER_LOGIN', 'false') === 'true';
+      if (requireSellerLogin && !loggedInUserIds[String(ad.user_id)]) {
         continue;
       }
 
@@ -637,6 +638,26 @@ const AdService = (function() {
     const isVerifiedUser = Boolean(currentUser && (currentUser.email_verified === true || currentUser.email_verified === 'TRUE' || String(currentUser.email_verified).toLowerCase() === 'true'));
     const isAdmin = Boolean(currentUser && Auth.checkAdminStatus(currentUser));
 
+    const slugCounts = {};
+    paginatedAds.forEach(function(a) {
+      const base = Validation.generateSlug(a.title, a.location, a.ad_id);
+      slugCounts[base] = (slugCounts[base] || 0) + 1;
+    });
+    const seenBases = {};
+    paginatedAds.forEach(function(a) {
+      const base = Validation.generateSlug(a.title, a.location, a.ad_id);
+      if (slugCounts[base] > 1) {
+        if (seenBases[base]) {
+          a.slug = Validation.generateSlug(a.title, a.location, a.ad_id, true);
+        } else {
+          seenBases[base] = true;
+          a.slug = base;
+        }
+      } else {
+        a.slug = base;
+      }
+    });
+
     const sanitized = paginatedAds.map(function(ad) {
       const uid = String(ad.user_id);
       if (userCache[uid] === undefined) {
@@ -661,18 +682,26 @@ const AdService = (function() {
   }
 
   /**
-   * Retrieves single public ad by ID.
+   * Retrieves single public ad by ID or slug.
    * Publicly accessible without requiring login.
    * DYNAMIC VISIBILITY RULE: An ad is publicly viewable only if the seller currently has an active login/session.
    * If the seller is logged out (or ad not approved/expired), non-owners and visitors receive 404 NOT_FOUND.
    * Admins and ad owners can view the listing regardless of seller's public login state.
    */
-  function getPublicAdById(adId, currentUser) {
-    if (!adId) {
-      return Responses.error('VALIDATION_ERROR', 'Parameter ad_id is required.', 400);
+  function getPublicAdById(identifier, currentUser) {
+    if (!identifier) {
+      return Responses.error('VALIDATION_ERROR', 'Parameter ad_id or slug is required.', 400);
     }
 
-    const ad = Sheets.findByKey('Ads', 'ad_id', adId);
+    let ad = Sheets.findByKey('Ads', 'ad_id', identifier);
+    if (!ad) {
+      const allAds = Sheets.getAll('Ads');
+      ad = allAds.find(function(a) {
+        const baseSlug = Validation.generateSlug(a.title, a.location, a.ad_id);
+        const slugWithSuffix = Validation.generateSlug(a.title, a.location, a.ad_id, true);
+        return baseSlug === identifier || slugWithSuffix === identifier || String(a.ad_id) === identifier;
+      });
+    }
     if (!ad) {
       return Responses.error('NOT_FOUND', 'Advertisement not found.', 404);
     }
@@ -690,11 +719,12 @@ const AdService = (function() {
     const isAdmin = Boolean(currentUser && Auth.checkAdminStatus(currentUser));
     const isVerifiedUser = Boolean(currentUser && (currentUser.email_verified === true || currentUser.email_verified === 'TRUE' || String(currentUser.email_verified).toLowerCase() === 'true'));
 
-    // Check seller active login state
+    // Check seller active login state if required
+    const requireSellerLogin = Config.get('REQUIRE_SELLER_LOGIN', 'false') === 'true';
     const sellerLoggedIn = isSellerLoggedIn(ad.user_id);
 
-    // Non-approved, expired, or ads whose seller is logged out are strictly hidden from public and non-owner/non-admin users
-    if (ad.status !== 'APPROVED' || isExpired || !sellerLoggedIn) {
+    // Non-approved, expired, or ads whose seller is logged out (if required) are strictly hidden from public and non-owner/non-admin users
+    if (ad.status !== 'APPROVED' || isExpired || (requireSellerLogin && !sellerLoggedIn)) {
       if (!isOwner && !isAdmin) {
         return Responses.error('NOT_FOUND', 'Advertisement not found or no longer available.', 404);
       }

@@ -416,6 +416,7 @@ const Validation = (function() {
     };
     base.contact_available = hasContactAvailable;
     base.contact_locked = !canViewContact;
+    base.slug = (adObj && adObj.slug) || generateSlug(base.title, base.location, base.ad_id);
 
     if (canViewContact && sellerUser) {
       const contactObj = {
@@ -435,11 +436,22 @@ const Validation = (function() {
         }
       }
       base.contact = contactObj;
+      if (!isFullAccess) {
+        delete base.rejection_reason;
+      }
     } else {
-      // Strictly remove contact fields for visitors and unverified users
+      // Strictly remove private contact & internal seller fields for visitors and unverified users
       delete base.seller.phone;
       delete base.seller.email;
+      delete base.seller.whatsapp;
       delete base.contact;
+      delete base.user_id;
+      delete base.rejection_reason;
+      delete base.user_email;
+      delete base.user_phone;
+      delete base.token;
+      delete base.session_id;
+      delete base.password_hash;
     }
 
     return base;
@@ -490,6 +502,27 @@ const Validation = (function() {
     return null;
   }
 
+  /**
+   * Generates a safe URL slug from ad title and location, with stable ID suffix for duplicates.
+   */
+  function generateSlug(title, location, adId, isDuplicate) {
+    var text = String(title || '').toLowerCase().trim();
+    var loc = String(location || '').toLowerCase().trim();
+    if (text && loc && text.indexOf(loc) === -1) {
+      text = text + ' ' + loc;
+    }
+    var slug = text
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    if (!slug) slug = 'ad';
+    if (isDuplicate && adId) {
+      var cleanId = String(adId).toLowerCase().replace(/[^a-z0-9]/g, '');
+      var suffix = cleanId.length > 5 ? cleanId.slice(-5) : cleanId;
+      slug = slug + '-' + suffix;
+    }
+    return slug;
+  }
+
   return {
     required: required,
     email: email,
@@ -502,7 +535,8 @@ const Validation = (function() {
     sanitizeUser: sanitizeUser,
     sanitizeAd: sanitizeAd,
     sanitizePublicAd: sanitizePublicAd,
-    sanitizeMembership: sanitizeMembership
+    sanitizeMembership: sanitizeMembership,
+    generateSlug: generateSlug
   };
 })();
 
@@ -2688,8 +2722,9 @@ const AdService = (function() {
       const ad = allAds[i];
       if (ad.status !== 'APPROVED') continue;
 
-      // Dynamic Seller Login Visibility Rule: Seller must be actively logged in
-      if (!loggedInUserIds[String(ad.user_id)]) {
+      // Dynamic Seller Login Visibility Rule: Enforced only if REQUIRE_SELLER_LOGIN setting is enabled
+      const requireSellerLogin = Config.get('REQUIRE_SELLER_LOGIN', 'false') === 'true';
+      if (requireSellerLogin && !loggedInUserIds[String(ad.user_id)]) {
         continue;
       }
 
@@ -2799,6 +2834,26 @@ const AdService = (function() {
     const isVerifiedUser = Boolean(currentUser && (currentUser.email_verified === true || currentUser.email_verified === 'TRUE' || String(currentUser.email_verified).toLowerCase() === 'true'));
     const isAdmin = Boolean(currentUser && Auth.checkAdminStatus(currentUser));
 
+    const slugCounts = {};
+    paginatedAds.forEach(function(a) {
+      const base = Validation.generateSlug(a.title, a.location, a.ad_id);
+      slugCounts[base] = (slugCounts[base] || 0) + 1;
+    });
+    const seenBases = {};
+    paginatedAds.forEach(function(a) {
+      const base = Validation.generateSlug(a.title, a.location, a.ad_id);
+      if (slugCounts[base] > 1) {
+        if (seenBases[base]) {
+          a.slug = Validation.generateSlug(a.title, a.location, a.ad_id, true);
+        } else {
+          seenBases[base] = true;
+          a.slug = base;
+        }
+      } else {
+        a.slug = base;
+      }
+    });
+
     const sanitized = paginatedAds.map(function(ad) {
       const uid = String(ad.user_id);
       if (userCache[uid] === undefined) {
@@ -2823,18 +2878,26 @@ const AdService = (function() {
   }
 
   /**
-   * Retrieves single public ad by ID.
+   * Retrieves single public ad by ID or slug.
    * Publicly accessible without requiring login.
    * DYNAMIC VISIBILITY RULE: An ad is publicly viewable only if the seller currently has an active login/session.
    * If the seller is logged out (or ad not approved/expired), non-owners and visitors receive 404 NOT_FOUND.
    * Admins and ad owners can view the listing regardless of seller's public login state.
    */
-  function getPublicAdById(adId, currentUser) {
-    if (!adId) {
-      return Responses.error('VALIDATION_ERROR', 'Parameter ad_id is required.', 400);
+  function getPublicAdById(identifier, currentUser) {
+    if (!identifier) {
+      return Responses.error('VALIDATION_ERROR', 'Parameter ad_id or slug is required.', 400);
     }
 
-    const ad = Sheets.findByKey('Ads', 'ad_id', adId);
+    let ad = Sheets.findByKey('Ads', 'ad_id', identifier);
+    if (!ad) {
+      const allAds = Sheets.getAll('Ads');
+      ad = allAds.find(function(a) {
+        const baseSlug = Validation.generateSlug(a.title, a.location, a.ad_id);
+        const slugWithSuffix = Validation.generateSlug(a.title, a.location, a.ad_id, true);
+        return baseSlug === identifier || slugWithSuffix === identifier || String(a.ad_id) === identifier;
+      });
+    }
     if (!ad) {
       return Responses.error('NOT_FOUND', 'Advertisement not found.', 404);
     }
@@ -2852,11 +2915,12 @@ const AdService = (function() {
     const isAdmin = Boolean(currentUser && Auth.checkAdminStatus(currentUser));
     const isVerifiedUser = Boolean(currentUser && (currentUser.email_verified === true || currentUser.email_verified === 'TRUE' || String(currentUser.email_verified).toLowerCase() === 'true'));
 
-    // Check seller active login state
+    // Check seller active login state if required
+    const requireSellerLogin = Config.get('REQUIRE_SELLER_LOGIN', 'false') === 'true';
     const sellerLoggedIn = isSellerLoggedIn(ad.user_id);
 
-    // Non-approved, expired, or ads whose seller is logged out are strictly hidden from public and non-owner/non-admin users
-    if (ad.status !== 'APPROVED' || isExpired || !sellerLoggedIn) {
+    // Non-approved, expired, or ads whose seller is logged out (if required) are strictly hidden from public and non-owner/non-admin users
+    if (ad.status !== 'APPROVED' || isExpired || (requireSellerLogin && !sellerLoggedIn)) {
       if (!isOwner && !isAdmin) {
         return Responses.error('NOT_FOUND', 'Advertisement not found or no longer available.', 404);
       }
@@ -4781,17 +4845,20 @@ const Router = (function() {
   }, [RateLimiter.limitCreateAd, Auth.requireAuth]);
 
   /**
-   * GET /ads/:id & GET /ad
-   * Returns single ad details by ID for visitors and authenticated members.
+   * GET /ads/:id, GET /ad/:slug & GET /ad
+   * Returns single ad details by slug or ID for visitors and authenticated members.
    * Contact details are strictly withheld unless authenticated and verified.
    */
   function handleGetPublicAd(req) {
-    const rawId = (req.params && (req.params.id || req.params.ad_id)) || (req.body && (req.body.id || req.body.ad_id));
+    const rawId = (req.params && (req.params.slug || req.params.id || req.params.ad_id)) || 
+                  (req.body && (req.body.slug || req.body.id || req.body.ad_id));
     const adId = cleanId(rawId);
     return AdService.getPublicAdById(adId, req.user);
   }
   Router.get('ads/:id', handleGetPublicAd, [Auth.optionalAuth]);
   Router.post('ads/:id', handleGetPublicAd, [Auth.optionalAuth]);
+  Router.get('ad/:slug', handleGetPublicAd, [Auth.optionalAuth]);
+  Router.post('ad/:slug', handleGetPublicAd, [Auth.optionalAuth]);
   Router.get('ad', handleGetPublicAd, [Auth.optionalAuth]);
   Router.post('ad', handleGetPublicAd, [Auth.optionalAuth]);
 

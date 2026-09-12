@@ -2,8 +2,9 @@
  * FreeAds Post - Client API Service
  * 
  * Communicates with the Google Apps Script Web App API backend.
- * Uses text/plain Content-Type to avoid CORS preflight failures on Google Apps Script endpoints.
  */
+
+import { computeAdSlugs, generateAdSlug } from '../utils/slug';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -44,7 +45,12 @@ export interface UserProfile {
   updated_at?: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_GAS_API_URL || '';
+let API_BASE_URL = '';
+try {
+  API_BASE_URL = import.meta.env.VITE_GAS_API_URL || '';
+} catch {
+  API_BASE_URL = '';
+}
 
 const MOCK_STORAGE_KEY_USER = 'freeadspost_mock_user';
 const MOCK_STORAGE_KEY_ADS = 'freeadspost_mock_ads';
@@ -55,7 +61,7 @@ function getStoredMockLoggedInUsers(): string[] {
   try {
     const raw = localStorage.getItem(MOCK_STORAGE_KEY_LOGGED_IN_USERS);
     if (!raw) {
-      const hasAuth = !!localStorage.getItem('freeadspost_auth_token');
+      const hasAuth = !!(localStorage.getItem('freeadspost_token') || localStorage.getItem('freeadspost_auth_token'));
       const initial = ['usr_other_1', 'usr_other_2', 'usr_other_3', 'usr_other_4', 'usr_other_5'];
       if (hasAuth) initial.push('usr_demo');
       localStorage.setItem(MOCK_STORAGE_KEY_LOGGED_IN_USERS, JSON.stringify(initial));
@@ -77,12 +83,12 @@ function getInitialMockAds(): Advertisement[] {
   return [
     {
       ad_id: 'mock_ad_1',
-      user_id: 'usr_demo',
+      user_id: 'usr_other_1',
       title: 'Vintage 1974 Fender Stratocaster Sunburst',
       category: 'Services',
       description: 'All original 1974 Stratocaster with hard case and vintage strap. Excellent condition, newly set up with fresh strings.',
       image_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
-      location: 'Austin, TX',
+      location: 'Mumbai, Maharashtra',
       contact_preference: 'BOTH',
       status: 'APPROVED',
       is_sponsored: true,
@@ -91,12 +97,12 @@ function getInitialMockAds(): Advertisement[] {
     },
     {
       ad_id: 'mock_ad_2',
-      user_id: 'usr_demo',
+      user_id: 'usr_other_2',
       title: 'Modern Full-Stack React & Node Web Development',
       category: 'Services',
       description: 'Experienced software engineer available for building custom web applications, dashboards, and automated workflows.',
       image_url: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=600&q=80',
-      location: 'San Francisco, CA',
+      location: 'Bengaluru, Karnataka',
       contact_preference: 'EMAIL',
       status: 'APPROVED',
       is_sponsored: true,
@@ -110,7 +116,7 @@ function getInitialMockAds(): Advertisement[] {
       category: 'Vehicles',
       description: 'Clean title, single owner, under 25k miles with full self driving computer, white interior, and dual motor AWD.',
       image_url: 'https://images.unsplash.com/photo-1560958089-b8a1929cea89?auto=format&fit=crop&w=600&q=80',
-      location: 'Denver, CO',
+      location: 'Delhi NCR',
       contact_preference: 'PHONE',
       status: 'APPROVED',
       is_sponsored: false,
@@ -124,7 +130,7 @@ function getInitialMockAds(): Advertisement[] {
       category: 'Real Estate',
       description: 'Spacious high-ceiling 1BR loft apartment in vibrant downtown area with hardwood floors, modern kitchen and parking.',
       image_url: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=600&q=80',
-      location: 'Seattle, WA',
+      location: 'Hyderabad, Telangana',
       contact_preference: 'EMAIL',
       status: 'APPROVED',
       is_sponsored: false,
@@ -138,7 +144,7 @@ function getInitialMockAds(): Advertisement[] {
       category: 'Jobs',
       description: 'Fast-growing tech startup seeking an exceptional Senior Frontend Engineer proficient with React, TypeScript, and modern CSS.',
       image_url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=600&q=80',
-      location: 'Remote',
+      location: 'Pune, Maharashtra',
       contact_preference: 'EMAIL',
       status: 'APPROVED',
       is_sponsored: false,
@@ -152,7 +158,7 @@ function getInitialMockAds(): Advertisement[] {
       category: 'Electronics',
       description: 'Like-new condition space black MacBook Pro. Includes original MagSafe charger, box, and AppleCare coverage.',
       image_url: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80',
-      location: 'New York, NY',
+      location: 'Chennai, Tamil Nadu',
       contact_preference: 'BOTH',
       status: 'APPROVED',
       is_sponsored: false,
@@ -163,21 +169,42 @@ function getInitialMockAds(): Advertisement[] {
       ad_id: 'mock_ad_7',
       user_id: 'usr_other_5',
       title: 'Custom Solid Oak Dining Table & Chairs',
-      category: 'Home & Garden',
+      category: 'Buy & Sell',
       description: 'Handmade 8-person solid oak dining table with matching bench and four upholstered chairs. Natural satin finish.',
       image_url: 'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?auto=format&fit=crop&w=600&q=80',
-      location: 'Miami, FL',
+      location: 'Kolkata, West Bengal',
       contact_preference: 'PHONE',
       status: 'APPROVED',
       is_sponsored: false,
       created_at: new Date(Date.now() - 432000000).toISOString(),
       expires_at: new Date(Date.now() + 30 * 86400000).toISOString()
+    },
+    {
+      ad_id: 'mock_ad_demo',
+      user_id: 'usr_demo',
+      title: 'Commercial Studio Photography & Visual Branding',
+      category: 'Services',
+      description: 'Award-winning commercial photographer available for product shoots, brand campaigns, and architectural portfolios.',
+      image_url: 'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?auto=format&fit=crop&w=600&q=80',
+      location: 'Mumbai, Maharashtra',
+      contact_preference: 'BOTH',
+      status: 'APPROVED',
+      is_sponsored: true,
+      created_at: new Date(Date.now() - 1800000).toISOString(),
+      expires_at: new Date(Date.now() + 30 * 86400000).toISOString()
     }
   ];
 }
 
-function getStoredMockAds(): Advertisement[] {
-  if (typeof window === 'undefined') return getInitialMockAds();
+let nodeMockAds: Advertisement[] | null = null;
+
+export function getStoredMockAds(): Advertisement[] {
+  if (typeof window === 'undefined') {
+    if (!nodeMockAds) {
+      nodeMockAds = getInitialMockAds();
+    }
+    return nodeMockAds;
+  }
   try {
     const raw = localStorage.getItem(MOCK_STORAGE_KEY_ADS);
     if (!raw) {
@@ -341,9 +368,9 @@ function handleLocalMock<T = any>(action: string, payload: Record<string, any>, 
 
   if (action === 'ads') {
     const allAds = getStoredMockAds();
-    const loggedInUsers = getStoredMockLoggedInUsers();
-    // Only approved ads from currently logged-in sellers are visible
-    let eligible = allAds.filter(a => a.status === 'APPROVED' && loggedInUsers.includes(a.user_id));
+    const slugMap = computeAdSlugs(allAds);
+    // Approved ads are publicly browsable without requiring seller login
+    let eligible = allAds.filter(a => a.status === 'APPROVED');
 
     // Distinct locations
     const locSet: Record<string, boolean> = {};
@@ -358,7 +385,11 @@ function handleLocalMock<T = any>(action: string, payload: Record<string, any>, 
     const cat = String(payload.category || '').trim();
 
     if (cat && cat.toUpperCase() !== 'ALL') {
-      eligible = eligible.filter(a => a.category.toLowerCase() === cat.toLowerCase());
+      const normCat = cat.toLowerCase().replace(/[\s/&]+/g, '-');
+      eligible = eligible.filter(a => {
+        const aNorm = (a.category || '').toLowerCase().replace(/[\s/&]+/g, '-');
+        return aNorm === normCat || (a.category && a.category.toLowerCase() === cat.toLowerCase());
+      });
     }
     if (loc && loc.toUpperCase() !== 'ALL') {
       eligible = eligible.filter(a => a.location.toLowerCase().includes(loc));
@@ -402,10 +433,12 @@ function handleLocalMock<T = any>(action: string, payload: Record<string, any>, 
     const hasValidAuth = Boolean(token);
     const sanitized = paginated.map(ad => {
       const clean = { ...ad };
+      clean.slug = slugMap.get(clean.ad_id) || generateAdSlug(clean.title, clean.location, clean.ad_id);
       const pref = (clean.contact_preference || 'EMAIL').toUpperCase();
       const sellerName = clean.user_id === 'usr_demo' ? 'Demo Member' : 'Verified Seller';
       clean.seller = { name: sellerName };
       clean.contact_available = true;
+      clean.contact_locked = !hasValidAuth;
 
       if (hasValidAuth) {
         clean.contact = { preference: pref };
@@ -420,9 +453,15 @@ function handleLocalMock<T = any>(action: string, payload: Record<string, any>, 
       } else {
         delete clean.seller.phone;
         delete clean.seller.email;
+        delete (clean.seller as any).whatsapp;
         delete clean.contact;
+        delete clean.user_id;
         delete (clean as any).user_email;
         delete (clean as any).user_phone;
+        delete clean.rejection_reason;
+        delete (clean as any).token;
+        delete (clean as any).password_hash;
+        delete (clean as any).session_id;
       }
       return clean;
     });
@@ -447,7 +486,14 @@ function handleLocalMock<T = any>(action: string, payload: Record<string, any>, 
 
   if (action === 'ad') {
     const allAds = getStoredMockAds();
-    const rawAd = allAds.find(a => a.ad_id === payload.ad_id);
+    const slugMap = computeAdSlugs(allAds);
+    const identifier = String(payload.slug || payload.ad_id || payload.id || '').trim();
+
+    const rawAd = allAds.find(a => 
+      a.ad_id === identifier || 
+      (slugMap.get(a.ad_id) === identifier) || 
+      a.slug === identifier
+    );
     if (!rawAd) {
       return {
         success: false,
@@ -459,20 +505,18 @@ function handleLocalMock<T = any>(action: string, payload: Record<string, any>, 
       };
     }
 
-    const loggedInUsers = getStoredMockLoggedInUsers();
-    const isSellerLoggedIn = loggedInUsers.includes(rawAd.user_id);
     const isOwner = token && (rawAd.user_id === 'usr_demo');
     const isAdmin = token && token.includes('admin');
 
-    // Dynamic visibility check: must be APPROVED and seller must have active login session
-    if (rawAd.status !== 'APPROVED' || !isSellerLoggedIn) {
+    // Dynamic visibility check: must be APPROVED for visitors; unapproved only visible to owner/admin
+    if (rawAd.status !== 'APPROVED') {
       if (!isOwner && !isAdmin) {
         return {
           success: false,
           statusCode: 404,
-          message: 'Advertisement not found or seller is currently offline.',
+          message: 'Advertisement not found.',
           data: null,
-          error: { code: 'NOT_FOUND', message: 'Advertisement not found or seller is currently offline.' },
+          error: { code: 'NOT_FOUND', message: 'Advertisement not found.' },
           timestamp
         };
       }
@@ -480,10 +524,12 @@ function handleLocalMock<T = any>(action: string, payload: Record<string, any>, 
 
     const hasValidAuth = Boolean(token);
     const clean = { ...rawAd };
+    clean.slug = slugMap.get(clean.ad_id) || generateAdSlug(clean.title, clean.location, clean.ad_id);
     const pref = (clean.contact_preference || 'EMAIL').toUpperCase();
     const sellerName = clean.user_id === 'usr_demo' ? 'Demo Member' : 'Verified Seller';
     clean.seller = { name: sellerName };
     clean.contact_available = true;
+    clean.contact_locked = !hasValidAuth;
 
     if (hasValidAuth) {
       clean.contact = { preference: pref };
@@ -498,9 +544,15 @@ function handleLocalMock<T = any>(action: string, payload: Record<string, any>, 
     } else {
       delete clean.seller.phone;
       delete clean.seller.email;
+      delete (clean.seller as any).whatsapp;
       delete clean.contact;
+      delete clean.user_id;
       delete (clean as any).user_email;
       delete (clean as any).user_phone;
+      delete clean.rejection_reason;
+      delete (clean as any).token;
+      delete (clean as any).password_hash;
+      delete (clean as any).session_id;
     }
 
     return {
@@ -964,7 +1016,7 @@ export interface AdContactDetails {
 
 export interface AdItem {
   ad_id: string;
-  user_id: string;
+  user_id?: string;
   title: string;
   category: string;
   description: string;
@@ -985,6 +1037,8 @@ export interface AdItem {
   seller?: SellerInfo;
   contact?: AdContactDetails;
   contact_available?: boolean;
+  contact_locked?: boolean;
+  slug?: string;
 }
 
 export type Advertisement = AdItem;
@@ -1219,12 +1273,12 @@ export async function getPublicAds(options?: PublicAdsOptions, token?: string): 
 }
 
 /**
- * Retrieves a single public advertisement by ID.
+ * Retrieves a single public advertisement by slug or ID.
  * Returns ad details with basic seller information.
  * Contact details (phone, email) are shielded unless authenticated and verified.
  */
-export async function getPublicAd(adId: string, token?: string): Promise<ApiResponse<{ ad: AdItem }>> {
-  return apiRequest('ad', { ad_id: adId }, token);
+export async function getPublicAd(identifier: string, token?: string): Promise<ApiResponse<{ ad: AdItem }>> {
+  return apiRequest('ad', { slug: identifier, ad_id: identifier }, token);
 }
 
 export interface UserMembershipData {

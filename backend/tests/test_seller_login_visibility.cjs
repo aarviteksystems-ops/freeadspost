@@ -92,7 +92,8 @@ global.LockService = {
 const scriptProps = {
   EXPOSE_DEBUG_TOKENS: 'true',
   VERIFICATION_EXPIRY_HOURS: '24',
-  REQUIRE_EMAIL_VERIFICATION: 'true'
+  REQUIRE_EMAIL_VERIFICATION: 'true',
+  REQUIRE_SELLER_LOGIN: 'true'
 };
 
 global.PropertiesService = {

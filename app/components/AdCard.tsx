@@ -1,5 +1,7 @@
 import { Link } from "react-router";
 import type { AdItem } from "~/services/api";
+import { toCategorySlug } from "~/utils/categories";
+import { resolveLocationSlug } from "~/utils/locations";
 
 interface AdCardProps {
   ad: AdItem;
@@ -21,6 +23,9 @@ function formatDate(dateStr?: string | null): string {
 }
 
 export function AdCard({ ad, onSelect }: AdCardProps) {
+  const locConfig = resolveLocationSlug(ad.location);
+  const adUrl = `/ad/${ad.slug || ad.ad_id}`;
+
   return (
     <article
       className={`group relative bg-white dark:bg-slate-900 border rounded-lg overflow-hidden transition-shadow duration-150 flex flex-col justify-between hover:shadow-md ${
@@ -41,37 +46,44 @@ export function AdCard({ ad, onSelect }: AdCardProps) {
           </div>
         )}
 
-        {/* Category Pill Overlay */}
+        {/* Category Pill Overlay - Crawlable Link */}
         <div className="absolute top-2 right-2 z-10">
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900/80 text-white backdrop-blur-xs">
+          <Link
+            to={`/category/${toCategorySlug(ad.category)}`}
+            className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900/80 text-white backdrop-blur-xs hover:bg-blue-600 transition-colors"
+          >
             {ad.category}
-          </span>
+          </Link>
         </div>
 
-        {ad.image_url ? (
-          <img
-            src={ad.image_url}
-            alt={ad.title}
-            referrerPolicy="no-referrer"
-            loading="lazy"
-            className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-200"
-            onError={(e) => {
-              (e.target as HTMLElement).style.display = "none";
-              const parent = (e.target as HTMLElement).parentElement;
-              if (parent) {
-                const placeholder = document.createElement("div");
-                placeholder.className = "flex flex-col items-center justify-center text-slate-400 text-xs py-8";
-                placeholder.innerHTML = "<span class='text-2xl mb-1'>🏷️</span><span>Verified Listing</span>";
-                parent.appendChild(placeholder);
-              }
-            }}
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 select-none">
-            <span className="text-3xl mb-1">📢</span>
-            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Classified Notice</span>
-          </div>
-        )}
+        {/* Crawlable Image Link */}
+        <Link to={adUrl} aria-label={ad.title} className="w-full h-full block">
+          {ad.image_url ? (
+            <img
+              src={ad.image_url}
+              alt={ad.title}
+              referrerPolicy="no-referrer"
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-200"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = "none";
+                const parent = (e.target as HTMLElement).parentElement;
+                if (parent) {
+                  const placeholder = document.createElement("div");
+                  placeholder.className = "flex flex-col items-center justify-center text-slate-400 text-xs py-8";
+                  placeholder.innerHTML = "<span class='text-2xl mb-1'>🏷️</span><span>Verified Listing</span>";
+                  parent.appendChild(placeholder);
+                }
+              }}
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 select-none">
+              <span className="text-3xl mb-1">📢</span>
+              <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Classified Notice</span>
+            </div>
+          )}
+        </Link>
       </div>
 
       {/* Card Content */}
@@ -82,7 +94,7 @@ export function AdCard({ ad, onSelect }: AdCardProps) {
             className="font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-snug line-clamp-2 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors"
             title={ad.title}
           >
-            <Link to={`/ad/${ad.ad_id}`} className="hover:underline">
+            <Link to={adUrl} className="hover:underline">
               {ad.title}
             </Link>
           </h3>
@@ -98,7 +110,16 @@ export function AdCard({ ad, onSelect }: AdCardProps) {
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span className="flex items-center gap-1 font-medium truncate max-w-[170px]" title={ad.location}>
               <span className="text-slate-400">📍</span>
-              <span className="truncate">{ad.location}</span>
+              {locConfig ? (
+                <Link
+                  to={`/location/${locConfig.slug}`}
+                  className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline truncate"
+                >
+                  {ad.location}
+                </Link>
+              ) : (
+                <span className="truncate">{ad.location}</span>
+              )}
             </span>
             <span className="text-[11px] shrink-0 text-slate-400">
               {formatDate(ad.approved_at || ad.created_at)}
@@ -110,24 +131,14 @@ export function AdCard({ ad, onSelect }: AdCardProps) {
               Contact: <span className="text-slate-700 dark:text-slate-300 uppercase font-bold">{ad.contact_preference}</span>
             </span>
 
-            {onSelect ? (
-              <button
-                type="button"
-                onClick={() => onSelect(ad)}
-                className="px-2.5 py-1 text-xs font-semibold text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline inline-flex items-center gap-1"
-              >
-                <span>Details</span>
-                <span>→</span>
-              </button>
-            ) : (
-              <Link
-                to={`/ad/${ad.ad_id}`}
-                className="px-2.5 py-1 text-xs font-semibold text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline inline-flex items-center gap-1"
-              >
-                <span>Details</span>
-                <span>→</span>
-              </Link>
-            )}
+            {/* Direct crawlable link to individual ad */}
+            <Link
+              to={adUrl}
+              className="px-2.5 py-1 text-xs font-semibold text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline inline-flex items-center gap-1"
+            >
+              <span>Details</span>
+              <span>→</span>
+            </Link>
           </div>
         </div>
       </div>

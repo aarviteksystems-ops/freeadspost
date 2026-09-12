@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useAuth } from "~/context/AuthContext";
+import { SUPPORTED_CATEGORIES } from "~/utils/categories";
 
 export function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -58,15 +59,38 @@ export function Navbar() {
             >
               Membership
             </Link>
+            <Link
+              to="/ads"
+              className="hover:text-slate-900 dark:hover:text-white transition-colors flex items-center gap-1"
+            >
+              <span>Browse Ads</span>
+            </Link>
+
+            {/* Categories Dropdown Menu */}
+            <div className="relative group py-2">
+              <button
+                type="button"
+                className="hover:text-slate-900 dark:hover:text-white transition-colors flex items-center gap-1 font-medium text-slate-600 dark:text-slate-300"
+              >
+                <span>Categories</span>
+                <span className="text-[10px] text-slate-400 group-hover:rotate-180 transition-transform duration-150">▼</span>
+              </button>
+              <div className="absolute left-0 top-full hidden group-hover:block w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg p-2 z-50 animate-in fade-in-50 duration-100">
+                {SUPPORTED_CATEGORIES.map((cat) => (
+                  <Link
+                    key={cat.slug}
+                    to={`/category/${cat.slug}`}
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <span className="text-base shrink-0">{cat.icon}</span>
+                    <span className="truncate">{cat.displayName}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
 
             {isAuthenticated && (
               <>
-                <Link
-                  to="/ads"
-                  className="hover:text-slate-900 dark:hover:text-white transition-colors flex items-center gap-1"
-                >
-                  <span>Browse Ads</span>
-                </Link>
                 <Link
                   to="/dashboard"
                   className="hover:text-slate-900 dark:hover:text-white transition-colors"
@@ -182,16 +206,36 @@ export function Navbar() {
           >
             Membership
           </Link>
+          <Link
+            to="/ads"
+            onClick={closeMenu}
+            className="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            Browse Ads
+          </Link>
+
+          {/* Mobile Category Links */}
+          <div className="pt-2 pb-1 border-t border-slate-100 dark:border-slate-800">
+            <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Categories
+            </div>
+            <div className="grid grid-cols-2 gap-1 px-1">
+              {SUPPORTED_CATEGORIES.map((cat) => (
+                <Link
+                  key={cat.slug}
+                  to={`/category/${cat.slug}`}
+                  onClick={closeMenu}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <span>{cat.icon}</span>
+                  <span className="truncate">{cat.displayName}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
 
           {isAuthenticated ? (
             <>
-              <Link
-                to="/ads"
-                onClick={closeMenu}
-                className="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                Browse Ads
-              </Link>
               <Link
                 to="/dashboard"
                 onClick={closeMenu}

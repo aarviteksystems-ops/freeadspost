@@ -1,16 +1,99 @@
 import { useState, useEffect } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, data, redirect } from "react-router";
+import type { Route } from "./+types/ad-detail";
 import { useAuth } from "~/context/AuthContext";
-import { getPublicAd, type AdItem } from "~/services/api";
+import { getPublicAd, getPublicAds, type AdItem } from "~/services/api";
+import { buildAdMetaDescriptors } from "~/utils/seo";
+import { StructuredData } from "~/components/StructuredData";
+import { buildBreadcrumbSchema, buildAdStructuredData } from "~/utils/schema";
+import { toCategorySlug } from "~/utils/categories";
+import { resolveLocationSlug } from "~/utils/locations";
+import { AdCard } from "~/components/AdCard";
 
-export function meta() {
-  return [
-    { title: "Advertisement Details - FreeAds Post" },
-    {
-      name: "description",
-      content: "View full details and verified seller information for classified advertisements on FreeAds Post."
+export async function loader({ params, request }: Route.LoaderArgs) {
+  const identifier = params.slug;
+  if (!identifier) {
+    return data({ ad: null, relatedAds: [] as AdItem[], requestUrl: request.url }, { status: 404 });
+  }
+  const res = await getPublicAd(identifier);
+  const ad = res.success && res.data ? res.data.ad : null;
+
+  if (!ad) {
+    return data({ ad: null, relatedAds: [] as AdItem[], requestUrl: request.url }, { status: 404 });
+  }
+
+  // Canonical 301 Redirect: If accessed by raw ID when a canonical slug exists
+  if (ad.slug && identifier !== ad.slug) {
+    return redirect(`/ad/${ad.slug}`, 301);
+  }
+
+  let relatedAds: AdItem[] = [];
+  try {
+    const relatedRes = await getPublicAds({ category: ad.category, limit: 6 });
+    if (relatedRes.success && relatedRes.data?.ads) {
+      relatedAds = relatedRes.data.ads
+        .filter((a) => a.ad_id !== ad.ad_id && a.status === "APPROVED")
+        .slice(0, 3);
     }
-  ];
+    if (relatedAds.length < 3) {
+      const moreRes = await getPublicAds({ limit: 6 });
+      if (moreRes.success && moreRes.data?.ads) {
+        const extra = moreRes.data.ads.filter(
+          (a) => a.ad_id !== ad.ad_id && !relatedAds.some((r) => r.ad_id === a.ad_id)
+        );
+        relatedAds.push(...extra.slice(0, 3 - relatedAds.length));
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return {
+    ad,
+    relatedAds,
+    requestUrl: request.url,
+  };
+}
+
+export async function clientLoader({ params, request, serverLoader }: Route.ClientLoaderArgs) {
+  try {
+    const serverData = await serverLoader();
+    if (serverData && serverData.ad) {
+      return serverData;
+    }
+  } catch {
+    // Fall back to client-side API call
+  }
+  const identifier = params.slug;
+  if (!identifier) {
+    return { ad: null, relatedAds: [] as AdItem[], requestUrl: request.url };
+  }
+  const res = await getPublicAd(identifier);
+  const ad = res.success && res.data ? res.data.ad : null;
+
+  let relatedAds: AdItem[] = [];
+  if (ad) {
+    try {
+      const relatedRes = await getPublicAds({ category: ad.category, limit: 6 });
+      if (relatedRes.success && relatedRes.data?.ads) {
+        relatedAds = relatedRes.data.ads
+          .filter((a) => a.ad_id !== ad.ad_id && a.status === "APPROVED")
+          .slice(0, 3);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return {
+    ad,
+    relatedAds,
+    requestUrl: request.url,
+  };
+}
+
+export function meta({ loaderData }: Route.MetaArgs) {
+  return buildAdMetaDescriptors(loaderData?.ad, loaderData?.requestUrl);
 }
 
 function formatDate(dateStr?: string | null): string {
@@ -28,12 +111,14 @@ function formatDate(dateStr?: string | null): string {
   }
 }
 
-export default function AdDetailPage() {
-  const { id } = useParams<{ id: string }>();
+export default function AdDetailPage({ loaderData }: Route.ComponentProps) {
+  const initialAd = loaderData?.ad || null;
+  const { slug, id } = useParams<{ slug?: string; id?: string }>();
+  const identifier = slug || id;
   const { token, user, isAuthenticated } = useAuth();
 
-  const [ad, setAd] = useState<AdItem | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [ad, setAd] = useState<AdItem | null>(initialAd);
+  const [isLoading, setIsLoading] = useState(!initialAd);
   const [error, setError] = useState<string | null>(null);
 
   const isVerified = Boolean(
@@ -43,9 +128,26 @@ export default function AdDetailPage() {
     )
   );
 
+  // Synchronize when loaderData updates during client navigation
   useEffect(() => {
-    if (!id) {
-      setError("No advertisement ID provided.");
+    if (loaderData?.ad) {
+      setAd(loaderData.ad);
+      setIsLoading(false);
+      setError(null);
+    }
+  }, [loaderData]);
+
+  useEffect(() => {
+    if (!identifier) {
+      if (!ad) {
+        setError("No advertisement specified.");
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // If unauthenticated and we already have the matching ad loaded, no extra fetch needed
+    if (!token && ad && (ad.slug === identifier || ad.ad_id === identifier)) {
       setIsLoading(false);
       return;
     }
@@ -53,20 +155,26 @@ export default function AdDetailPage() {
     let isMounted = true;
 
     const fetchAd = async () => {
-      setIsLoading(true);
+      if (!ad) {
+        setIsLoading(true);
+      }
       setError(null);
       try {
-        const res = await getPublicAd(id, token || undefined);
+        const res = await getPublicAd(identifier, token || undefined);
         if (!isMounted) return;
 
         if (res.success && res.data && res.data.ad) {
           setAd(res.data.ad);
         } else {
-          setError(res.error?.message || "Advertisement not found or no longer available.");
+          if (!ad) {
+            setError(res.error?.message || "Advertisement not found or no longer available.");
+          }
         }
       } catch (err: any) {
         if (!isMounted) return;
-        setError(err.message || "Unable to load advertisement details.");
+        if (!ad) {
+          setError(err.message || "Unable to load advertisement details.");
+        }
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -77,7 +185,7 @@ export default function AdDetailPage() {
     return () => {
       isMounted = false;
     };
-  }, [id, token]);
+  }, [identifier, token]);
 
   if (isLoading) {
     return (
@@ -135,9 +243,25 @@ export default function AdDetailPage() {
   const contactPhone = ad.contact?.phone || ad.seller?.phone;
   const contactEmail = ad.contact?.email || ad.seller?.email;
   const rawPhoneDigits = contactPhone ? contactPhone.replace(/\D/g, "") : "";
+  const locConfig = resolveLocationSlug(ad.location);
+  const relatedAds = loaderData?.relatedAds || [];
+
+  const breadcrumbSchema = buildBreadcrumbSchema(
+    [
+      { name: "Home", url: "/" },
+      ...(ad.category
+        ? [{ name: ad.category, url: `/category/${toCategorySlug(ad.category)}` }]
+        : [{ name: "Classifieds", url: "/ads" }]),
+      { name: ad.title, url: `/ad/${ad.slug || ad.ad_id}` },
+    ],
+    loaderData?.requestUrl
+  );
+
+  const adSchema = buildAdStructuredData(ad, loaderData?.requestUrl);
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50 dark:bg-slate-950 py-6 sm:py-10">
+      <StructuredData data={[breadcrumbSchema, adSchema]} />
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         {/* Navigation Breadcrumb */}
         <nav className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
@@ -145,10 +269,24 @@ export default function AdDetailPage() {
             Home
           </Link>
           <span>/</span>
-          <Link to="/ads" className="hover:text-blue-700 dark:hover:text-blue-400 transition-colors">
-            Classifieds
-          </Link>
-          <span>/</span>
+          {ad.category ? (
+            <>
+              <Link
+                to={`/category/${toCategorySlug(ad.category)}`}
+                className="hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
+              >
+                {ad.category}
+              </Link>
+              <span>/</span>
+            </>
+          ) : (
+            <>
+              <Link to="/ads" className="hover:text-blue-700 dark:hover:text-blue-400 transition-colors">
+                Classifieds
+              </Link>
+              <span>/</span>
+            </>
+          )}
           <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[200px] sm:max-w-xs">
             {ad.title}
           </span>
@@ -171,9 +309,12 @@ export default function AdDetailPage() {
                 )}
 
                 <div className="absolute top-4 right-4 z-10">
-                  <span className="text-xs font-bold px-3 py-1 rounded bg-slate-900/80 text-white backdrop-blur-xs">
+                  <Link
+                    to={`/category/${toCategorySlug(ad.category)}`}
+                    className="text-xs font-bold px-3 py-1 rounded bg-slate-900/80 hover:bg-blue-600 text-white backdrop-blur-xs transition-colors"
+                  >
                     {ad.category}
-                  </span>
+                  </Link>
                 </div>
 
                 {ad.image_url ? (
@@ -181,6 +322,9 @@ export default function AdDetailPage() {
                     src={ad.image_url}
                     alt={ad.title}
                     referrerPolicy="no-referrer"
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       (e.target as HTMLElement).style.display = "none";
@@ -211,7 +355,16 @@ export default function AdDetailPage() {
                   <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-xs text-slate-500 dark:text-slate-400 pt-1">
                     <span className="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300">
                       <span>📍</span>
-                      <span>{ad.location}</span>
+                      {locConfig ? (
+                        <Link
+                          to={`/location/${locConfig.slug}`}
+                          className="hover:text-blue-700 dark:hover:text-blue-400 hover:underline transition-colors"
+                        >
+                          {ad.location}
+                        </Link>
+                      ) : (
+                        <span>{ad.location}</span>
+                      )}
                     </span>
                     <span>•</span>
                     <span>Posted {formatDate(ad.approved_at || ad.created_at)}</span>
@@ -295,7 +448,7 @@ export default function AdDetailPage() {
                     </div>
                     <div className="space-y-1">
                       <h5 className="font-bold text-slate-900 dark:text-white text-sm">
-                        Login to view contact information
+                        Login to view seller contact information
                       </h5>
                       <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
                         To protect our sellers from spam, scraping, and fraud, phone numbers and email addresses are only accessible to verified members.
@@ -304,7 +457,7 @@ export default function AdDetailPage() {
 
                     <div className="pt-2 flex flex-col gap-2">
                       <Link
-                        to={`/login?redirect=${encodeURIComponent(`/ad/${ad.ad_id}`)}`}
+                        to={`/login?redirect=${encodeURIComponent(`/ad/${ad.slug || ad.ad_id}`)}`}
                         className="w-full py-2.5 px-4 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-xs transition-colors"
                       >
                         Log In to Contact Seller
@@ -445,6 +598,44 @@ export default function AdDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Related Classifieds & Contextual Navigation */}
+        {relatedAds.length > 0 && (
+          <section className="pt-8 border-t border-slate-200 dark:border-slate-800 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                  Similar & Related Classifieds
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Explore active verified listings in {ad.category || "India"}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  to={`/category/${toCategorySlug(ad.category)}`}
+                  className="text-xs font-bold text-blue-700 dark:text-blue-400 hover:underline px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-900/50"
+                >
+                  All {ad.category} Ads →
+                </Link>
+                {locConfig && (
+                  <Link
+                    to={`/location/${locConfig.slug}`}
+                    className="text-xs font-bold text-slate-700 dark:text-slate-300 hover:underline px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                  >
+                    Classifieds in {locConfig.city} →
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {relatedAds.map((relatedAd) => (
+                <AdCard key={relatedAd.ad_id} ad={relatedAd} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

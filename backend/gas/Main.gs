@@ -162,17 +162,20 @@
   }, [RateLimiter.limitCreateAd, Auth.requireAuth]);
 
   /**
-   * GET /ads/:id & GET /ad
-   * Returns single ad details by ID for visitors and authenticated members.
+   * GET /ads/:id, GET /ad/:slug & GET /ad
+   * Returns single ad details by slug or ID for visitors and authenticated members.
    * Contact details are strictly withheld unless authenticated and verified.
    */
   function handleGetPublicAd(req) {
-    const rawId = (req.params && (req.params.id || req.params.ad_id)) || (req.body && (req.body.id || req.body.ad_id));
+    const rawId = (req.params && (req.params.slug || req.params.id || req.params.ad_id)) || 
+                  (req.body && (req.body.slug || req.body.id || req.body.ad_id));
     const adId = cleanId(rawId);
     return AdService.getPublicAdById(adId, req.user);
   }
   Router.get('ads/:id', handleGetPublicAd, [Auth.optionalAuth]);
   Router.post('ads/:id', handleGetPublicAd, [Auth.optionalAuth]);
+  Router.get('ad/:slug', handleGetPublicAd, [Auth.optionalAuth]);
+  Router.post('ad/:slug', handleGetPublicAd, [Auth.optionalAuth]);
   Router.get('ad', handleGetPublicAd, [Auth.optionalAuth]);
   Router.post('ad', handleGetPublicAd, [Auth.optionalAuth]);
 

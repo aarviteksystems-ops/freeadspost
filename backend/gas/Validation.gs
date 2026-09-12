@@ -195,6 +195,7 @@ const Validation = (function() {
     };
     base.contact_available = hasContactAvailable;
     base.contact_locked = !canViewContact;
+    base.slug = (adObj && adObj.slug) || generateSlug(base.title, base.location, base.ad_id);
 
     if (canViewContact && sellerUser) {
       const contactObj = {
@@ -214,11 +215,22 @@ const Validation = (function() {
         }
       }
       base.contact = contactObj;
+      if (!isFullAccess) {
+        delete base.rejection_reason;
+      }
     } else {
-      // Strictly remove contact fields for visitors and unverified users
+      // Strictly remove private contact & internal seller fields for visitors and unverified users
       delete base.seller.phone;
       delete base.seller.email;
+      delete base.seller.whatsapp;
       delete base.contact;
+      delete base.user_id;
+      delete base.rejection_reason;
+      delete base.user_email;
+      delete base.user_phone;
+      delete base.token;
+      delete base.session_id;
+      delete base.password_hash;
     }
 
     return base;
@@ -269,6 +281,27 @@ const Validation = (function() {
     return null;
   }
 
+  /**
+   * Generates a safe URL slug from ad title and location, with stable ID suffix for duplicates.
+   */
+  function generateSlug(title, location, adId, isDuplicate) {
+    var text = String(title || '').toLowerCase().trim();
+    var loc = String(location || '').toLowerCase().trim();
+    if (text && loc && text.indexOf(loc) === -1) {
+      text = text + ' ' + loc;
+    }
+    var slug = text
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    if (!slug) slug = 'ad';
+    if (isDuplicate && adId) {
+      var cleanId = String(adId).toLowerCase().replace(/[^a-z0-9]/g, '');
+      var suffix = cleanId.length > 5 ? cleanId.slice(-5) : cleanId;
+      slug = slug + '-' + suffix;
+    }
+    return slug;
+  }
+
   return {
     required: required,
     email: email,
@@ -281,6 +314,7 @@ const Validation = (function() {
     sanitizeUser: sanitizeUser,
     sanitizeAd: sanitizeAd,
     sanitizePublicAd: sanitizePublicAd,
-    sanitizeMembership: sanitizeMembership
+    sanitizeMembership: sanitizeMembership,
+    generateSlug: generateSlug
   };
 })();
