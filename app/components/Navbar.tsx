@@ -33,9 +33,9 @@ export function Navbar() {
               <div className="text-lg font-black tracking-tight text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                 FreeAds<span className="text-amber-600 dark:text-amber-500">Post</span>
               </div>
-              <div className="text-[10px] font-semibold text-slate-400 dark:text-slate-400 uppercase tracking-wider -mt-1 hidden sm:block">
-                India&apos;s Verified Classifieds
-              </div>
+              {/* <div className="text-[10px] font-semibold text-slate-400 dark:text-slate-400 uppercase tracking-wider -mt-1 hidden sm:block">
+                Buy, sell, and discover <br />trusted services locally.
+              </div> */}
             </div>
           </Link>
 

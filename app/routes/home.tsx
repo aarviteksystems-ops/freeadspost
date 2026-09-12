@@ -9,7 +9,7 @@ import { buildWebSiteSchema, buildOrganizationSchema } from "~/utils/schema";
 
 export function meta() {
   return [
-    { title: "FreeAds Post - India's Trusted Free Classifieds Marketplace" },
+    { title: "Buy, sell, and discover trusted services locally." },
     {
       name: "description",
       content: "Browse verified Indian classified advertisements. Find trusted local services, jobs, real estate, electronics, and vehicles."
@@ -121,7 +121,7 @@ export default function Home() {
           <div className="max-w-3xl space-y-2.5">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md text-xs font-semibold bg-slate-800 text-amber-400 border border-slate-700">
               <span>🇮🇳</span>
-              <span>India&apos;s Verified Classifieds Network</span>
+              <span>Buy, sell, and discover trusted services locally.</span>
             </div>
 
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
@@ -176,14 +176,13 @@ export default function Home() {
               {/* Action Link */}
               <div className="sm:col-span-2">
                 <Link
-                  to={`/ads${
-                    searchQuery || (selectedLocation && selectedLocation !== "All India")
-                      ? `?${new URLSearchParams({
-                          ...(searchQuery ? { q: searchQuery } : {}),
-                          ...(selectedLocation && selectedLocation !== "All India" ? { location: selectedLocation } : {}),
-                        }).toString()}`
-                      : ""
-                  }`}
+                  to={`/ads${searchQuery || (selectedLocation && selectedLocation !== "All India")
+                    ? `?${new URLSearchParams({
+                      ...(searchQuery ? { q: searchQuery } : {}),
+                      ...(selectedLocation && selectedLocation !== "All India" ? { location: selectedLocation } : {}),
+                    }).toString()}`
+                    : ""
+                    }`}
                   className="w-full h-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm font-bold rounded-md flex items-center justify-center transition-colors shadow-sm"
                 >
                   Browse All
@@ -325,11 +324,10 @@ export default function Home() {
                 key={cat}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-colors ${
-                  selectedCategory === cat
-                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm"
-                    : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800"
-                }`}
+                className={`px-3 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-colors ${selectedCategory === cat
+                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm"
+                  : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
               >
                 {cat}
               </button>
